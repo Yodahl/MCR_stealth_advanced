@@ -304,8 +304,8 @@ typedef struct {
 StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 
 
-#define THR_Sens 400    //白判定しきい値  300
-#define THR_M_Sens 300  //白判定しきい値  280
+#define THR_Sens 400    //白判定しきい値  400
+#define THR_M_Sens 300  //白判定しきい値  300
 #define thrSensBK 100   //黒判定しきい値  200 150 100 使ってない
 
 #define ACCEL_ANGLE 20  //再生走行用直線判断アングル
@@ -345,14 +345,17 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 #define CRANK_ANGLE_R 90 // 右クランクアングル 110
 #define CRANK_ANGLE_L 90 // 左クランクアングル 110
 
+#define CRANK_TOP_SPEED   2.2// 2.4m/s
+#define CRANK_MIN_SPEED   2.0// 2.0m/s
 
-#define PWM_MAX 80  //足回りモーターのマックスPWM（記憶走行）
+
+#define PWM_MAX 40  //足回りモーターのマックスPWM（記憶走行）
 
 /*
  *	ステアセンター値
  *	@note 必ず車体ごとに変更！！
  */
-#define VR_CENTER 526 //497
+#define VR_CENTER 520 //497
 
 // 1mの距離
 #define METER 1447L
