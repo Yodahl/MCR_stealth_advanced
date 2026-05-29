@@ -342,20 +342,20 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	クランク角度
  */
-#define CRANK_ANGLE_R 90 // 右クランクアングル 110
-#define CRANK_ANGLE_L 90 // 左クランクアングル 110
+#define CRANK_ANGLE_R 100 // 右クランクアングル 110
+#define CRANK_ANGLE_L 100 // 左クランクアングル 110
 
 #define CRANK_TOP_SPEED   2.2// 2.4m/s
-#define CRANK_MIN_SPEED   2.0// 2.0m/s
+#define CRANK_MIN_SPEED   1.8// 2.0m/s
 
 
-#define PWM_MAX 40  //足回りモーターのマックスPWM（記憶走行）
+#define PWM_MAX 80  //足回りモーターのマックスPWM（記憶走行）
 
 /*
  *	ステアセンター値
  *	@note 必ず車体ごとに変更！！
  */
-#define VR_CENTER 520 //497
+#define VR_CENTER 524 //497
 
 // 1mの距離
 #define METER 1447L
@@ -363,9 +363,9 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	坂関連
  */
-#define SLOPE_UP_START 420    // 上り開始判定   450
+#define SLOPE_UP_START 450    // 上り開始判定   450
 
-#define SLOPE_DOWN_START 600  // 下り開始判定   500
+#define SLOPE_DOWN_START 600  // 下り開始判定   600
 
 /*
  *	内臓フラッシュ関連
