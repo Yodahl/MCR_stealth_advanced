@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>MCRLoger v4</title>
+  <style>
+    :root {
+      --page:      #f9f9f7;
+      --surface:   #fcfcfb;
+      --ink:       #0b0b0b;
+      --ink-2:     #52514e;
+      --muted:     #898781;
+      --grid:      #e1e0d9;
+      --baseline:  #c3c2b7;
+      --border:    rgba(11,11,11,0.10);
+      /* 系列色（dataviz参照パレット・CVD検証済み） */
+      --c-speed:   #2a78d6;
+      --c-angle:   #4a3aa7;
+      --c-setang:  #e87ba4;
+      --c-fl:      #eb6834;
+      --c-fr:      #1baf7a;
+      --c-rl:      #008300;
+      --c-rr:      #eda100;
+      --c-st:      #e34948;
+      --c-anaL:    #86b6ef;
+      --c-anaC:    #2a78d6;
+      --c-anaR:    #104281;
+      --c-drive:   #2a78d6;  /* 車両パネル: 駆動 */
+      --c-brake:   #e34948;  /* 車両パネル: ブレーキ */
+      --accent:    #2a78d6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 16px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background-color: var(--page); color: var(--ink);
+    }
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+    h2 { margin: 0 0 10px; font-size: 18px; }
+    .controls, .settings { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .settings { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+    .settings label { display: flex; gap: 6px; align-items: center; }
+    .file-info { margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .btn {
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 6px;
+      cursor: pointer; font-size: 14px; background: var(--surface); color: var(--ink);
+    }
+    .btn:hover { background: #f0efec; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #1c5cab; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+    input[type=text], input[type=number] {
+      padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+    }
+    input[type=range] { accent-color: var(--accent); }
+    select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--surface); }
+    #seekBar { flex: 1 1 240px; min-width: 160px; }
+    .readout { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .readout b { color: var(--ink); }
+
+    .main-grid { display: flex; gap: 14px; flex-wrap: wrap; }
+    .panel-card { flex: 0 0 auto; }
+    .map-card { flex: 1 1 380px; min-width: 320px; position: relative; }
+    .card h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+    .card .note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    canvas { display: block; }
+    .canvas-stack { position: relative; }
+    .canvas-stack canvas.overlay { position: absolute; left: 0; top: 0; }
+
+    .map-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .map-legend .ramp {
+      width: 130px; height: 8px; border-radius: 4px;
+      background: linear-gradient(to right, #3166ac, #4393c3, #35b779, #f4e07a, #f46d43, #d73027);
+    }
+
+    /* 時系列 系列表示トグル */
+    .series-toggles { display: flex; flex-wrap: wrap; gap: 6px 7px; margin-bottom: 10px; align-items: center; }
+    .series-toggles .lane-tag { font-size: 10px; color: var(--muted); margin-left: 6px; }
+    .series-toggles .lane-tag:first-child { margin-left: 0; }
+    .series-toggle {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; padding: 3px 9px; border-radius: 13px;
+      border: 1px solid var(--border); cursor: pointer; user-select: none;
+      background: var(--surface); color: var(--ink);
+    }
+    .series-toggle:hover { background: #f0efec; }
+    .series-toggle .sw { width: 13px; height: 3px; border-radius: 2px; flex: none; }
+    .series-toggle.off { opacity: 0.45; }
+    .series-toggle.off .lbl { text-decoration: line-through; }
+
+    #tooltip {
+      position: fixed; display: none; pointer-events: none; z-index: 50;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      padding: 8px 10px; font-size: 12px; min-width: 150px;
+    }
+    #tooltip .tt-head { color: var(--muted); margin-bottom: 5px; font-variant-numeric: tabular-nums; }
+    #tooltip .tt-row { display: flex; align-items: center; gap: 6px; line-height: 1.7; }
+    #tooltip .tt-key { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+    #tooltip .tt-val { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: auto; padding-left: 12px; }
+    #tooltip .tt-label { color: var(--ink-2); }
+
+    .table-container {
+      max-height: 46vh; overflow: auto;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+    }
+    table { width: 100%; border-collapse: collapse; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    th, td { border: 1px solid var(--grid); padding: 4px 7px; text-align: center; min-width: 56px; font-variant-numeric: tabular-nums; }
+    th { background: #4a5568; color: #fff; position: sticky; top: 0; z-index: 10; }
+    td { background: var(--surface); }
+    tr:nth-child(even) td { background: #f6f6f3; }
+    tr:hover td { background: #e9f1fb; cursor: pointer; }
+    tr.current-row td { background: #d7e7fa; box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent); }
+    .highlight td { background: #ffeb3b !important; }
+    .sensor-on { color: var(--ink); font-weight: bold; }
+    .sensor-off { color: var(--muted); }
+    .stats-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat-item { text-align: center; padding: 6px 14px; background: #f4f4f1; border-radius: 6px; }
+    .stat-label { font-size: 11px; color: var(--muted); }
+    .stat-value { font-size: 16px; font-weight: 600; }
+    .hidden { display: none !important; }
+    kbd { font-size: 11px; color: var(--muted); border: 1px solid var(--grid); border-radius: 3px; padding: 0 4px; background: #f4f4f1; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>MCRLoger v4 — 走行ログ再生</h2>
+    <div class="controls">
+      <input type="file" id="fileInput" accept=".txt,.log,.csv">
+      <span id="playbackControls" class="controls hidden" style="gap:8px;">
+        <button id="stepBackBtn" class="btn" title="1フレーム戻る (←)">⏮</button>
+        <button id="playBtn" class="btn btn-primary" title="再生/停止 (Space)">▶ 再生</button>
+        <button id="stepFwdBtn" class="btn" title="1フレーム進む (→)">⏭</button>
+        <select id="speedSel" title="再生速度">
+          <option value="0.1">0.1×</option>
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+        <label style="font-size:12px;color:var(--ink-2)"><input type="checkbox" id="loopChk"> ループ</label>
+      </span>
+    </div>
+    <div id="seekRow" class="controls hidden" style="margin-top:10px;">
+      <input type="range" id="seekBar" min="0" max="0" step="1" value="0">
+      <span class="readout">行 <b id="roIdx">0</b> ／ <b id="roTime">0.00</b> s ／ <b id="roDist">0.00</b> m</span>
+    </div>
+    <div id="settingsRow" class="settings hidden">
+      <label>舵角換算
+        <input type="range" id="steerCoef" min="0.05" max="2.0" step="0.01" value="0.6" style="width:130px">
+        <input type="number" id="steerCoefNum" min="0.05" max="2.0" step="0.01" value="0.60" style="width:62px"> °/count</label>
+      <label title="直進時に d_4 が示す値を打ち消して直線を真っすぐ描く">センター補正
+        <input type="number" id="steerOffset" min="-80" max="80" step="1" value="0" style="width:54px"> count</label>
+      <label>ホイールベース <input type="number" id="wheelBase" min="0.05" max="0.4" step="0.005" value="0.15" style="width:64px"> m</label>
+      <label><input type="checkbox" id="followChk" checked> テーブル追従</label>
+      <span style="color:var(--muted)">グラフ: クリック/ドラッグ=シーク・ホイール=ズーム・<kbd>Shift</kbd>+ドラッグ=パン・ダブルクリック=リセット</span>
+    </div>
+    <div class="file-info" id="fileInfo"></div>
+  </div>
+
+  <div class="card hidden" id="statsPanel">
+    <div class="stats-grid" id="statsGrid"></div>
+  </div>
+
+  <div class="main-grid hidden" id="vizGrid">
+    <div class="card panel-card">
+      <h3>車両パネル</h3>
+      <canvas id="vehicleCanvas"></canvas>
+    </div>
+    <div class="card map-card">
+      <h3>推定走行軌跡（クリックでシーク）</h3>
+      <div class="canvas-stack" id="mapStack">
+        <canvas id="mapCanvas"></canvas>
+        <canvas id="mapOverlay" class="overlay"></canvas>
+      </div>
+      <div class="map-legend">
+        <span id="mapVmin">0.0</span>
+        <div class="ramp"></div>
+        <span id="mapVmax">0.0</span>
+        <span>m/s</span>
+        <span style="margin-left:auto">※1相エンコーダ・舵角換算誤差のため形状は近似</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="chartsCard">
+    <h3>時系列</h3>
+    <div class="series-toggles" id="seriesToggles"></div>
+    <div class="canvas-stack" id="chartStack">
+      <canvas id="chartCanvas"></canvas>
+      <canvas id="chartOverlay" class="overlay"></canvas>
+    </div>
+  </div>
+
+  <div class="card hidden" id="tableCard">
+    <div class="controls" style="margin-bottom:10px;">
+      <input type="text" id="searchInput" placeholder="検索 (行番号, 値, など)">
+      <input type="number" id="jumpInput" placeholder="行番号" min="0" style="width:90px">
+      <button id="jumpBtn" class="btn">ジャンプ</button>
+      <button id="exportBtn" class="btn">CSV出力</button>
+    </div>
+    <div class="table-container" id="tableContainer">
+      <table id="logTable"></table>
+    </div>
+  </div>
+
+  <div id="tooltip"></div>
+
+<script>
+'use strict';
+
+/* ================= 定数（ファームウェア logging.ino / LOG_rec が根拠） ================= */
+const DT = 0.01;                 // 1行 = 10ms
+const PULSE_TO_MS = 0.0691;      // d_1(10ms毎パルス) → m/s
+const M_PER_PULSE = 0.000691;    // パルス → m
+const COLUMN_NAMES = [
+  'LL', 'CC', 'RR',
+  '速度m/s', 'pattern', '減算距離', 'サーボ角', '指定角',
+  'アナログL', 'アナログC', 'アナログR', 'PWMステア',
+  'PWM RL', 'PWM FL', 'PWM FR', 'PWM RR', '累積パルス', '坂検知'
+];
+
+function patternName(p) {
+  if (p <= 5)   return 'スタート準備';
+  if (p <= 9)   return 'スタート待機';
+  if (p === 10) return '発進';
+  if (p === 11) return '通常トレース';
+  if (p >= 50  && p <= 52)  return '坂';
+  if (p >= 101 && p <= 120) return 'クランク';
+  if (p >= 151 && p <= 170) return 'レーンチェンジ';
+  if (p >= 220 && p <= 235) return '停止処理';
+  return '—';
+}
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const C = {};  // 色は起動時にCSS変数から取り込む
+['speed','angle','setang','fl','fr','rl','rr','st','anaL','anaC','anaR','drive','brake'].forEach(k => C[k] = css('--c-' + k));
+const INK = css('--ink'), INK2 = css('--ink-2'), MUTED = css('--muted'),
+      GRID = css('--grid'), BASE = css('--baseline'), SURFACE = css('--surface'), ACCENT = css('--accent');
+
+/* ================= 状態 ================= */
+let allRows = [];       // {no, values(表示用), raw[16], rawLine}
+let filteredRows = [];
+let S = null;           // 派生系列 {speed[],angle[],...}
+let N = 0;
+let cur = 0;            // 再生位置（float行）
+let playing = false;
+let view = { a: 0, b: 1 };   // グラフの表示行範囲
+let traj = null;        // 軌跡 {pts:[{x,y,th}], minX..maxY, vmin, vmax}
+let trByIdx = new Map();     // 行番号 → テーブルtr
+let lastHighlightTr = null;
+
+/* ================= パース（ver3から流用） ================= */
+function parseD(line) {
+  const raw = [];
+  for (let i = 0; i < 16; i++) {
+    const m = line.match(new RegExp('d_' + i + '=\\s*(-?\\d+)'));
+    raw.push(m ? parseInt(m[1], 10) : 0);
+  }
+  return raw;
+}
+function pushRow(raw, line) {
+  const d0 = raw[0];
+  const LL = ((d0 >> 2) & 1) ? '●' : '◯';
+  const CC = ((d0 >> 1) & 1) ? '●' : '◯';
+  const RR = ((d0 >> 0) & 1) ? '●' : '◯';
+  allRows.push({
+    no: allRows.length,
+    values: [LL, CC, RR, (raw[1] * PULSE_TO_MS).toFixed(3), ...raw.slice(2)],
+    raw: raw,
+    rawLine: line
+  });
+}
+function processLogFile(lines) {
+  lines.forEach(line => {
+    if (line.includes('fin') && line.includes('d_0=')) pushRow(parseD(line), line);
+  });
+}
+function processCsvFile(lines) {
+  lines.forEach(line => {
+    if (line.trim() === '') return;
+    line.split(',').forEach(cell => {
+      const c = cell.trim();
+      if (c.includes('fin') && c.includes('d_0=')) pushRow(parseD(c), c);
+    });
+  });
+}
+
+function buildSeries() {
+  N = allRows.length;
+  S = { speed: [], angle: [], setAng: [], pwmFL: [], pwmFR: [], pwmRL: [], pwmRR: [], pwmST: [],
+        anaL: [], anaC: [], anaR: [], pattern: [], enc: [], dist: [], slope: [], sen: [] };
+  for (const r of allRows) {
+    const d = r.raw;
+    S.sen.push(d[0]);
+    S.enc.push(d[1]);
+    S.speed.push(d[1] * PULSE_TO_MS);
+    S.pattern.push(d[2]);
+    S.angle.push(d[4]);
+    S.setAng.push(d[5]);
+    S.anaL.push(d[6]); S.anaC.push(d[7]); S.anaR.push(d[8]);
+    S.pwmST.push(d[9]);
+    S.pwmRL.push(d[10]); S.pwmFL.push(d[11]); S.pwmFR.push(d[12]); S.pwmRR.push(d[13]);
+    S.dist.push(d[14] * M_PER_PULSE);
+    S.slope.push(d[15]);
+  }
+}
+
+/* ================= ファイル読み込み ================= */
+document.getElementById('fileInput').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    const content = ev.target.result;
+    const lines = content.split('\n');
+    allRows = [];
+    document.getElementById('fileInfo').textContent =
+      '📁 ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB, ' + lines.length + ' 行)';
+    if (file.name.toLowerCase().endsWith('.csv') && content.indexOf(',') >= 0) processCsvFile(lines);
+    else processLogFile(lines);
+    if (allRows.length === 0) {
+      document.getElementById('fileInfo').textContent += ' — ⚠️ データが見つかりませんでした（d_0=..fin 形式を確認）';
+      return;
+    }
+    filteredRows = allRows.slice();
+    buildSeries();
+    initAfterLoad();
+  };
+  reader.readAsText(file);
+});
+
+function initAfterLoad() {
+  cur = 0; playing = false; updatePlayBtn();
+  view = { a: 0, b: Math.max(1, N - 1) };
+  ['playbackControls','seekRow','settingsRow'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+  ['statsPanel','vizGrid','chartsCard','tableCard'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+  const seek = document.getElementById('seekBar');
+  seek.max = N - 1; seek.value = 0;
+  showStats();
+  buildSeriesToggles();
+  sizeCanvases();
+  computeTraj();
+  drawChartsStatic();
+  drawMapStatic();
+  renderTable();
+  seekTo(0, true);
+}
+
+/* ================= 統計 ================= */
+function showStats() {
+  const maxV = Math.max(...S.speed);
+  const avgV = S.speed.reduce((a, b) => a + b, 0) / N;
+  const stats = {
+    '総行数': N,
+    '走行時間': (N * DT).toFixed(1) + ' s',
+    '総距離': S.dist[N - 1].toFixed(1) + ' m',
+    '最高速度': maxV.toFixed(2) + ' m/s',
+    '平均速度': avgV.toFixed(2) + ' m/s'
+  };
+  const grid = document.getElementById('statsGrid');
+  grid.textContent = '';
+  for (const [k, v] of Object.entries(stats)) {
+    const item = document.createElement('div'); item.className = 'stat-item';
+    const l = document.createElement('div'); l.className = 'stat-label'; l.textContent = k;
+    const val = document.createElement('div'); val.className = 'stat-value'; val.textContent = v;
+    item.appendChild(l); item.appendChild(val); grid.appendChild(item);
+  }
+}
+
+/* ================= キャンバスサイズ (DPR対応) ================= */
+const DPR = window.devicePixelRatio || 1;
+function setupCanvas(cv, w, h) {
+  cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return ctx;
+}
+const VEH = { w: 330, h: 330 };
+let MAP = { w: 400, h: 300 };
+let CHT = { w: 800, h: 0 };
+
+/* グラフレーン定義（配色はレーン内隣接ΔE最適化済み） */
+const LANES = [
+  { title: '速度 [m/s]', tag: '速度', h: 74, series: [ { key: 'speed', label: '速度', color: C.speed, fmt: v => v.toFixed(2), visible: true } ] },
+  { title: '舵角 [count]', tag: '舵角', h: 74, series: [
+      { key: 'angle',  label: '実舵角', color: C.angle,  fmt: v => v.toFixed(0), visible: true },
+      { key: 'setAng', label: '指定角', color: C.setang, fmt: v => v.toFixed(0), visible: true } ] },
+  { title: 'モータPWM [%]', tag: 'モータ', h: 104, series: [
+      { key: 'pwmFL', label: 'FL', color: C.fl, fmt: v => v.toFixed(0), visible: true },
+      { key: 'pwmFR', label: 'FR', color: C.fr, fmt: v => v.toFixed(0), visible: true },
+      { key: 'pwmRL', label: 'RL', color: C.rl, fmt: v => v.toFixed(0), visible: true },
+      { key: 'pwmRR', label: 'RR', color: C.rr, fmt: v => v.toFixed(0), visible: true },
+      { key: 'pwmST', label: 'ステア', color: C.st, fmt: v => v.toFixed(0), visible: true } ] },
+  { title: 'アナログセンサ', tag: 'アナログ', h: 74, series: [
+      { key: 'anaL', label: 'CL', color: C.anaL, fmt: v => v.toFixed(0), visible: true },
+      { key: 'anaC', label: 'CC', color: C.anaC, fmt: v => v.toFixed(0), visible: true },
+      { key: 'anaR', label: 'CR', color: C.anaR, fmt: v => v.toFixed(0), visible: true } ] },
+  { title: 'pattern', tag: 'pattern', h: 50, step: true, series: [ { key: 'pattern', label: 'pattern', color: INK2, fmt: v => v.toFixed(0), visible: true } ] }
+];
+
+/* 系列表示トグルの生成 */
+function buildSeriesToggles() {
+  const wrap = document.getElementById('seriesToggles');
+  wrap.textContent = '';
+  LANES.forEach(lane => {
+    const tag = document.createElement('span');
+    tag.className = 'lane-tag'; tag.textContent = lane.tag;
+    wrap.appendChild(tag);
+    lane.series.forEach(s => {
+      const chip = document.createElement('span');
+      chip.className = 'series-toggle' + (s.visible ? '' : ' off');
+      const sw = document.createElement('span');
+      sw.className = 'sw'; sw.style.background = s.color;
+      const lbl = document.createElement('span');
+      lbl.className = 'lbl'; lbl.textContent = s.label;
+      chip.appendChild(sw); chip.appendChild(lbl);
+      chip.addEventListener('click', () => {
+        s.visible = !s.visible;
+        chip.classList.toggle('off', !s.visible);
+        drawChartsStatic(); drawChartOverlay();
+      });
+      wrap.appendChild(chip);
+    });
+  });
+}
+const CM = { left: 50, right: 14, titleH: 18, laneGap: 8, axisH: 22 };
+
+function sizeCanvases() {
+  setupCanvas(document.getElementById('vehicleCanvas'), VEH.w, VEH.h);
+  const mapCard = document.querySelector('.map-card');
+  MAP.w = Math.max(320, mapCard.clientWidth - 34);
+  MAP.h = VEH.h - 30;
+  setupCanvas(document.getElementById('mapCanvas'), MAP.w, MAP.h);
+  setupCanvas(document.getElementById('mapOverlay'), MAP.w, MAP.h);
+  CHT.w = Math.max(480, document.getElementById('chartsCard').clientWidth - 34);
+  CHT.h = LANES.reduce((a, l) => a + CM.titleH + l.h + CM.laneGap, 0) + CM.axisH;
+  setupCanvas(document.getElementById('chartCanvas'), CHT.w, CHT.h);
+  setupCanvas(document.getElementById('chartOverlay'), CHT.w, CHT.h);
+}
+window.addEventListener('resize', () => {
+  if (!S) return;
+  sizeCanvases(); drawChartsStatic(); drawMapStatic(); drawOverlays(); drawVehicle(Math.round(cur));
+});
+
+/* ================= 時系列グラフ（静的レイヤ） ================= */
+function laneGeom() {
+  const g = []; let y = 0;
+  for (const l of LANES) {
+    y += CM.titleH;
+    g.push({ y0: y, y1: y + l.h });
+    y += l.h + CM.laneGap;
+  }
+  return g;
+}
+function laneRange(lane) {
+  if (lane.title.startsWith('速度')) return [0, Math.max(1, Math.ceil(Math.max(...S.speed) * 1.1 * 10) / 10)];
+  if (lane.title.startsWith('舵角')) return [-130, 130];
+  if (lane.title.startsWith('モータ')) return [-105, 105];
+  if (lane.title.startsWith('アナログ')) {
+    let mx = 0; for (const s of lane.series) mx = Math.max(mx, ...S[s.key]);
+    return [0, Math.max(100, Math.ceil(mx / 100) * 100)];
+  }
+  return [0, 240]; // pattern
+}
+const xOf = i => CM.left + (i - view.a) / (view.b - view.a) * (CHT.w - CM.left - CM.right);
+const idxOfX = x => view.a + (x - CM.left) / (CHT.w - CM.left - CM.right) * (view.b - view.a);
+
+function drawSeriesLine(ctx, arr, geo, r, step) {
+  const yOf = v => geo.y1 - (v - r[0]) / (r[1] - r[0]) * (geo.y1 - geo.y0);
+  const w = CHT.w - CM.left - CM.right;
+  const i0 = Math.max(0, Math.floor(view.a)), i1 = Math.min(N - 1, Math.ceil(view.b));
+  ctx.beginPath();
+  if (i1 - i0 <= w * 1.5) {
+    let first = true, py = 0;
+    for (let i = i0; i <= i1; i++) {
+      const x = xOf(i), y = yOf(arr[i]);
+      if (first) { ctx.moveTo(x, y); first = false; }
+      else { if (step) ctx.lineTo(x, py); ctx.lineTo(x, y); }
+      py = y;
+    }
+  } else { // 1pxごとにmin/max（間引きでスパイクを潰さない）
+    let started = false;
+    for (let px = 0; px <= w; px++) {
+      const a = view.a + (px / w) * (view.b - view.a);
+      const b = view.a + ((px + 1) / w) * (view.b - view.a);
+      let mn = Infinity, mx = -Infinity;
+      for (let i = Math.max(0, Math.floor(a)); i <= Math.min(N - 1, Math.floor(b)); i++) {
+        const v = arr[i]; if (v < mn) mn = v; if (v > mx) mx = v;
+      }
+      if (mn === Infinity) continue;
+      const x = CM.left + px + 0.5;
+      if (!started) { ctx.moveTo(x, yOf(mx)); started = true; }
+      ctx.lineTo(x, yOf(mx)); ctx.lineTo(x, yOf(mn));
+    }
+  }
+  ctx.stroke();
+}
+
+function drawChartsStatic() {
+  const ctx = document.getElementById('chartCanvas').getContext('2d');
+  ctx.clearRect(0, 0, CHT.w, CHT.h);
+  const geos = laneGeom();
+  const plotW = CHT.w - CM.left - CM.right;
+
+  /* 共有X目盛（秒） */
+  const tSpan = (view.b - view.a) * DT;
+  const stepS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 30, 60].find(s => tSpan / s <= 12) || 60;
+  const ticks = [];
+  for (let t = Math.ceil(view.a * DT / stepS) * stepS; t <= view.b * DT + 1e-9; t += stepS) ticks.push(t);
+
+  LANES.forEach((lane, li) => {
+    const geo = geos[li], r = laneRange(lane);
+    /* レーンタイトル＋凡例（2系列以上のみ） */
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    ctx.fillStyle = INK2;
+    ctx.fillText(lane.title, CM.left, geo.y0 - 5);
+    if (lane.series.length >= 2) {
+      let lx = CM.left + ctx.measureText(lane.title).width + 16;
+      for (const s of lane.series) {
+        if (s.visible === false) continue;
+        ctx.strokeStyle = s.color; ctx.lineWidth = 3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(lx, geo.y0 - 8); ctx.lineTo(lx + 12, geo.y0 - 8); ctx.stroke();
+        ctx.fillStyle = MUTED;
+        ctx.fillText(s.label, lx + 16, geo.y0 - 5);
+        lx += 16 + ctx.measureText(s.label).width + 14;
+      }
+    }
+    /* 縦グリッド（時刻）＋横グリッド */
+    ctx.lineWidth = 1; ctx.strokeStyle = GRID;
+    for (const t of ticks) {
+      const x = Math.round(xOf(t / DT)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, geo.y0); ctx.lineTo(x, geo.y1); ctx.stroke();
+    }
+    const yTicks = (r[0] < 0 && r[1] > 0) ? [r[0], 0, r[1]] : [r[0], (r[0] + r[1]) / 2, r[1]];
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = '10px system-ui, sans-serif';
+    for (const v of yTicks) {
+      const y = Math.round(geo.y1 - (v - r[0]) / (r[1] - r[0]) * (geo.y1 - geo.y0)) + 0.5;
+      ctx.strokeStyle = v === 0 ? BASE : GRID;
+      ctx.beginPath(); ctx.moveTo(CM.left, y); ctx.lineTo(CHT.w - CM.right, y); ctx.stroke();
+      if (li !== LANES.length - 1) { // patternレーンはY目盛なし
+        ctx.fillStyle = MUTED;
+        ctx.fillText(String(Math.round(v * 10) / 10), CM.left - 6, y);
+      }
+    }
+    /* 系列 */
+    ctx.save();
+    ctx.beginPath(); ctx.rect(CM.left, geo.y0, plotW, geo.y1 - geo.y0); ctx.clip();
+    ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const s of lane.series) {
+      if (s.visible === false) continue;
+      ctx.strokeStyle = s.color;
+      drawSeriesLine(ctx, S[s.key], geo, r, lane.step);
+    }
+    ctx.restore();
+    /* patternレーン: 遷移マーク */
+    if (lane.step) {
+      ctx.strokeStyle = BASE; ctx.lineWidth = 1;
+      const i0 = Math.max(1, Math.floor(view.a)), i1 = Math.min(N - 1, Math.ceil(view.b));
+      const strideMin = (view.b - view.a) / plotW; let lastX = -99;
+      for (let i = i0; i <= i1; i++) {
+        if (S.pattern[i] !== S.pattern[i - 1]) {
+          const x = Math.round(xOf(i)) + 0.5;
+          if (x - lastX > 3) {
+            ctx.beginPath(); ctx.moveTo(x, geo.y0 - 3); ctx.lineTo(x, geo.y0 + 3); ctx.stroke();
+            lastX = x;
+          }
+        }
+      }
+    }
+  });
+
+  /* X軸ラベル（最下段のみ） */
+  const lastGeo = geos[geos.length - 1];
+  ctx.fillStyle = MUTED; ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const t of ticks) ctx.fillText(t.toFixed(stepS < 1 ? 1 : 0) + 's', xOf(t / DT), lastGeo.y1 + 6);
+}
+
+/* ================= グラフ オーバーレイ（再生カーソル＋ホバー） ================= */
+let hoverIdx = null;
+function drawChartOverlay() {
+  const ctx = document.getElementById('chartOverlay').getContext('2d');
+  ctx.clearRect(0, 0, CHT.w, CHT.h);
+  const geos = laneGeom();
+  const yTop = geos[0].y0, yBot = geos[geos.length - 1].y1;
+  if (cur >= view.a && cur <= view.b) {
+    const x = Math.round(xOf(cur)) + 0.5;
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, yTop - 4); ctx.lineTo(x, yBot); ctx.stroke();
+    ctx.fillStyle = ACCENT;
+    ctx.beginPath(); ctx.moveTo(x - 4, yTop - 4); ctx.lineTo(x + 4, yTop - 4); ctx.lineTo(x, yTop + 2); ctx.closePath(); ctx.fill();
+  }
+  if (hoverIdx !== null && hoverIdx >= view.a && hoverIdx <= view.b) {
+    const x = Math.round(xOf(hoverIdx)) + 0.5;
+    ctx.strokeStyle = BASE; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, yTop); ctx.lineTo(x, yBot); ctx.stroke();
+  }
+}
+
+/* ツールチップ（全系列を一括表示・textContentで構築） */
+function showTooltip(clientX, clientY, i) {
+  const tt = document.getElementById('tooltip');
+  tt.textContent = '';
+  const head = document.createElement('div');
+  head.className = 'tt-head';
+  head.textContent = '行 ' + i + ' ・ ' + (i * DT).toFixed(2) + 's ・ ' + S.dist[i].toFixed(2) + 'm ・ ' +
+                     'pat ' + S.pattern[i] + ' (' + patternName(S.pattern[i]) + ')';
+  tt.appendChild(head);
+  for (const lane of LANES) {
+    for (const s of lane.series) {
+      if (s.key === 'pattern' || s.visible === false) continue;
+      const row = document.createElement('div'); row.className = 'tt-row';
+      const key = document.createElement('span'); key.className = 'tt-key'; key.style.background = s.color;
+      const lab = document.createElement('span'); lab.className = 'tt-label'; lab.textContent = s.label;
+      const val = document.createElement('span'); val.className = 'tt-val'; val.textContent = s.fmt(S[s.key][i]);
+      row.appendChild(key); row.appendChild(lab); row.appendChild(val);
+      tt.appendChild(row);
+    }
+  }
+  tt.style.display = 'block';
+  const r = tt.getBoundingClientRect();
+  let x = clientX + 14, y = clientY + 12;
+  if (x + r.width > window.innerWidth - 8) x = clientX - r.width - 14;
+  if (y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+  tt.style.left = x + 'px'; tt.style.top = y + 'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+/* グラフ操作: クリック/ドラッグ=シーク, Shift+ドラッグ=パン, ホイール=ズーム, ダブルクリック=リセット */
+(function () {
+  const ov = document.getElementById('chartOverlay');
+  let dragging = false, panning = false, panStartX = 0, panStartView = null;
+  const clampView = () => {
+    const span = Math.max(10, view.b - view.a);
+    view.a = Math.max(0, Math.min(view.a, N - 1 - span));
+    view.b = view.a + Math.min(span, N - 1);
+    if (view.b > N - 1) { view.b = N - 1; view.a = Math.max(0, view.b - span); }
+  };
+  ov.addEventListener('pointerdown', e => {
+    if (!S) return;
+    ov.setPointerCapture(e.pointerId);
+    const rect = ov.getBoundingClientRect();
+    if (e.shiftKey) { panning = true; panStartX = e.clientX; panStartView = { ...view }; }
+    else { dragging = true; seekTo(idxOfX(e.clientX - rect.left)); }
+  });
+  ov.addEventListener('pointermove', e => {
+    if (!S) return;
+    const rect = ov.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (panning) {
+      const span = panStartView.b - panStartView.a;
+      const di = (panStartX - e.clientX) / (CHT.w - CM.left - CM.right) * span;
+      view.a = panStartView.a + di; view.b = panStartView.b + di;
+      clampView(); drawChartsStatic(); drawChartOverlay();
+      return;
+    }
+    if (dragging) { seekTo(idxOfX(x)); return; }
+    const i = Math.round(idxOfX(x));
+    if (x >= CM.left && x <= CHT.w - CM.right && i >= 0 && i < N) {
+      hoverIdx = i; drawChartOverlay(); showTooltip(e.clientX, e.clientY, i);
+    } else { hoverIdx = null; drawChartOverlay(); hideTooltip(); }
+  });
+  ov.addEventListener('pointerup', () => { dragging = false; panning = false; });
+  ov.addEventListener('pointerleave', () => { hoverIdx = null; if (S) drawChartOverlay(); hideTooltip(); });
+  ov.addEventListener('wheel', e => {
+    if (!S) return;
+    e.preventDefault();
+    const rect = ov.getBoundingClientRect();
+    const anchor = idxOfX(e.clientX - rect.left);
+    const f = e.deltaY > 0 ? 1.25 : 0.8;
+    view.a = anchor + (view.a - anchor) * f;
+    view.b = anchor + (view.b - anchor) * f;
+    clampView(); drawChartsStatic(); drawChartOverlay();
+  }, { passive: false });
+  ov.addEventListener('dblclick', () => {
+    if (!S) return;
+    view = { a: 0, b: N - 1 }; drawChartsStatic(); drawChartOverlay();
+  });
+})();
+
+/* ================= 推定走行軌跡 ================= */
+/* 速度ヒートランプ（遅→速: 青→水→緑→黄→橙→赤）。連続補間で滑らかに描く */
+const MAP_RAMP = [
+  [0.00, [ 49, 102, 172]], // 青
+  [0.22, [ 67, 147, 195]], // 水色
+  [0.44, [ 53, 183, 121]], // 緑
+  [0.66, [244, 224, 122]], // 黄
+  [0.83, [244, 109,  67]], // 橙
+  [1.00, [215,  48,  39]]  // 赤
+];
+function rampColor(t) {
+  t = Math.max(0, Math.min(1, t));
+  for (let k = 1; k < MAP_RAMP.length; k++) {
+    if (t <= MAP_RAMP[k][0]) {
+      const [t0, c0] = MAP_RAMP[k - 1], [t1, c1] = MAP_RAMP[k];
+      const f = (t - t0) / (t1 - t0);
+      return 'rgb(' + Math.round(c0[0] + (c1[0] - c0[0]) * f) + ',' +
+                      Math.round(c0[1] + (c1[1] - c0[1]) * f) + ',' +
+                      Math.round(c0[2] + (c1[2] - c0[2]) * f) + ')';
+    }
+  }
+  return 'rgb(215,48,39)';
+}
+/* 舵角パラメータ: K=換算[°/count], off=センター補正[count], L=ホイールベース[m] */
+function steerParams() {
+  return {
+    K: parseFloat(document.getElementById('steerCoef').value) || 0.6,
+    off: parseFloat(document.getElementById('steerOffset').value) || 0,
+    L: Math.max(0.05, parseFloat(document.getElementById('wheelBase').value) || 0.15)
+  };
+}
+/* 補正後の操舵角[°]: (生カウント−センター)×換算、物理的な操舵限界±70°でクランプ */
+function steerDegAt(i) {
+  const { K, off } = steerParams();
+  return Math.max(-70, Math.min(70, (S.angle[i] - off) * K));
+}
+function computeTraj() {
+  const { K, off, L } = steerParams();
+  let x = 0, y = 0, th = 0;
+  const pts = new Array(N);
+  pts[0] = { x: 0, y: 0, th: 0 };
+  for (let i = 1; i < N; i++) {
+    const ds = S.enc[i] * M_PER_PULSE;
+    const deltaDeg = Math.max(-70, Math.min(70, (S.angle[i] - off) * K)); // 左が正・±70°クランプ
+    const delta = deltaDeg * Math.PI / 180;
+    th += ds / L * Math.tan(delta);
+    x += ds * Math.cos(th); y += ds * Math.sin(th);
+    pts[i] = { x, y, th };
+  }
+  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  const vs = S.speed.filter(v => v > 0.05);
+  traj = { pts, minX, maxX, minY, maxY,
+           vmin: vs.length ? Math.min(...vs) : 0, vmax: vs.length ? Math.max(...vs) : 1 };
+  document.getElementById('mapVmin').textContent = traj.vmin.toFixed(1);
+  document.getElementById('mapVmax').textContent = traj.vmax.toFixed(1);
+}
+function mapXY(p) {
+  const pad = 18;
+  const sx = (MAP.w - pad * 2) / Math.max(1e-6, traj.maxX - traj.minX);
+  const sy = (MAP.h - pad * 2) / Math.max(1e-6, traj.maxY - traj.minY);
+  const s = Math.min(sx, sy);
+  const ox = pad + (MAP.w - pad * 2 - (traj.maxX - traj.minX) * s) / 2;
+  const oy = pad + (MAP.h - pad * 2 - (traj.maxY - traj.minY) * s) / 2;
+  return { x: ox + (p.x - traj.minX) * s, y: MAP.h - (oy + (p.y - traj.minY) * s), s };
+}
+function drawMapStatic() {
+  const ctx = document.getElementById('mapCanvas').getContext('2d');
+  ctx.clearRect(0, 0, MAP.w, MAP.h);
+  if (!traj || N < 2) return;
+  const stride = Math.max(1, Math.floor(N / 4000));
+  ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+  const span = Math.max(1e-6, traj.vmax - traj.vmin);
+  let prev = mapXY(traj.pts[0]);
+  for (let i = stride; i < N; i += stride) {
+    const p = mapXY(traj.pts[i]);
+    ctx.strokeStyle = rampColor((S.speed[i] - traj.vmin) / span);
+    ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    prev = p;
+  }
+  /* スタートマーカー */
+  const s0 = mapXY(traj.pts[0]);
+  ctx.fillStyle = SURFACE; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(s0.x, s0.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = INK; ctx.font = 'bold 10px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('S', s0.x, s0.y + 0.5);
+}
+function drawMapOverlay() {
+  const ctx = document.getElementById('mapOverlay').getContext('2d');
+  ctx.clearRect(0, 0, MAP.w, MAP.h);
+  if (!traj || N < 1) return;
+  const i = Math.max(0, Math.min(N - 1, Math.round(cur)));
+  const p = mapXY(traj.pts[i]);
+  const th = -traj.pts[i].th; // 画面はy反転
+  ctx.save();
+  ctx.translate(p.x, p.y); ctx.rotate(th);
+  ctx.fillStyle = ACCENT; ctx.strokeStyle = SURFACE; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(9, 0); ctx.lineTo(-6, 5.5); ctx.lineTo(-6, -5.5); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+document.getElementById('mapOverlay').addEventListener('click', e => {
+  if (!traj) return;
+  const rect = e.target.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  let best = 0, bestD = Infinity;
+  const stride = Math.max(1, Math.floor(N / 6000));
+  for (let i = 0; i < N; i += stride) {
+    const p = mapXY(traj.pts[i]);
+    const d = (p.x - mx) ** 2 + (p.y - my) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  seekTo(best);
+});
+function recomputeSteering() {
+  if (!S) return;
+  computeTraj(); drawMapStatic(); drawMapOverlay(); drawVehicle(Math.round(cur));
+}
+/* 換算係数: スライダーと数値入力を双方向同期（0.05〜2.0でクランプ） */
+(function () {
+  const slider = document.getElementById('steerCoef');
+  const num = document.getElementById('steerCoefNum');
+  const clamp = v => Math.max(0.05, Math.min(2.0, v));
+  slider.addEventListener('input', () => {
+    num.value = parseFloat(slider.value).toFixed(2);
+    recomputeSteering();
+  });
+  num.addEventListener('input', () => {
+    const v = parseFloat(num.value);
+    if (isNaN(v)) return;
+    slider.value = clamp(v);
+    recomputeSteering();
+  });
+  num.addEventListener('change', () => {
+    num.value = clamp(parseFloat(num.value) || 0.6).toFixed(2);
+    slider.value = num.value;
+    recomputeSteering();
+  });
+})();
+document.getElementById('steerOffset').addEventListener('input', recomputeSteering);
+document.getElementById('wheelBase').addEventListener('input', recomputeSteering);
+
+/* ================= 車両パネル ================= */
+function drawVehicle(i) {
+  const ctx = document.getElementById('vehicleCanvas').getContext('2d');
+  ctx.clearRect(0, 0, VEH.w, VEH.h);
+  if (!S || i < 0 || i >= N) return;
+  const steerDeg = steerDegAt(i);
+
+  /* 上段: 速度(ヒーロー) / pattern / 坂 */
+  ctx.fillStyle = INK; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.font = '600 30px system-ui, sans-serif';
+  const speedTxt = S.speed[i].toFixed(2);
+  ctx.fillText(speedTxt, 14, 36);
+  const speedW = ctx.measureText(speedTxt).width;
+  ctx.fillStyle = MUTED; ctx.font = '11px system-ui, sans-serif';
+  ctx.fillText('m/s', 14 + speedW + 6, 36);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = INK2; ctx.font = '600 13px system-ui, sans-serif';
+  ctx.fillText('pat ' + S.pattern[i], VEH.w - 14, 24);
+  ctx.fillStyle = MUTED; ctx.font = '11px system-ui, sans-serif';
+  ctx.fillText(patternName(S.pattern[i]), VEH.w - 14, 39);
+  const sl = S.slope[i];
+  ctx.fillText('坂 ' + (sl > 0 ? '↗ 上り' : sl < 0 ? '↘ 下り' : '→ 平坦'), VEH.w - 14, 54);
+
+  const cx = VEH.w / 2, cy = 185;
+
+  /* ラインセンサ ●/◯ ＋ アナログバー */
+  const senY = 78, d0 = S.sen[i];
+  const senDefs = [
+    { x: cx - 40, on: (d0 >> 2) & 1, label: 'LL' },
+    { x: cx,      on: (d0 >> 1) & 1, label: 'CC' },
+    { x: cx + 40, on: (d0 >> 0) & 1, label: 'RR' }
+  ];
+  for (const s of senDefs) {
+    ctx.beginPath(); ctx.arc(s.x, senY, 6, 0, Math.PI * 2);
+    if (s.on) { ctx.fillStyle = INK; ctx.fill(); }
+    else { ctx.strokeStyle = MUTED; ctx.lineWidth = 1.5; ctx.stroke(); }
+    ctx.fillStyle = MUTED; ctx.font = '9px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(s.label, s.x, senY - 11);
+  }
+  const anaDefs = [
+    { x: cx - 40, v: S.anaL[i], c: C.anaL },
+    { x: cx,      v: S.anaC[i], c: C.anaC },
+    { x: cx + 40, v: S.anaR[i], c: C.anaR }
+  ];
+  for (const a of anaDefs) {
+    const h = Math.max(0, Math.min(1, a.v / 1000)) * 22;
+    ctx.fillStyle = GRID; ctx.fillRect(a.x - 5, senY + 12, 10, 22);
+    ctx.fillStyle = a.c;  ctx.fillRect(a.x - 5, senY + 12 + (22 - h), 10, h);
+  }
+
+  /* 車体 */
+  ctx.strokeStyle = BASE; ctx.lineWidth = 1.5; ctx.fillStyle = '#f4f4f1';
+  roundRect(ctx, cx - 34, cy - 62, 68, 124, 10); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = GRID;
+  ctx.beginPath(); ctx.moveTo(cx, cy - 62); ctx.lineTo(cx, cy + 62); ctx.stroke();
+
+  /* ホイール（前輪は舵角で回転。左正＝画面では反時計回り） */
+  const wheels = [
+    { x: cx - 48, y: cy - 42, steer: true,  pwm: S.pwmFL[i], label: 'FL', side: -1 },
+    { x: cx + 48, y: cy - 42, steer: true,  pwm: S.pwmFR[i], label: 'FR', side: 1 },
+    { x: cx - 48, y: cy + 42, steer: false, pwm: S.pwmRL[i], label: 'RL', side: -1 },
+    { x: cx + 48, y: cy + 42, steer: false, pwm: S.pwmRR[i], label: 'RR', side: 1 }
+  ];
+  for (const w of wheels) {
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    if (w.steer) ctx.rotate(-steerDeg * Math.PI / 180);
+    ctx.fillStyle = INK2;
+    roundRect(ctx, -7, -16, 14, 32, 4); ctx.fill();
+    ctx.restore();
+    /* PWMバー（外側へ・上=駆動/下=ブレーキ） */
+    const bx = w.x + w.side * 22;
+    const len = Math.max(-1, Math.min(1, w.pwm / 100)) * 34;
+    ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx - 5, w.y + 0.5); ctx.lineTo(bx + 5, w.y + 0.5); ctx.stroke();
+    ctx.fillStyle = w.pwm >= 0 ? C.drive : C.brake;
+    if (len >= 0) roundRect(ctx, bx - 5, w.y - len, 10, Math.max(1, len), 3);
+    else roundRect(ctx, bx - 5, w.y, 10, -len, 3);
+    ctx.fill();
+    /* ラベルと数値はバーの可動域(±34px)の外側に縦に並べる */
+    const above = w.y < cy;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK2; ctx.font = '10px system-ui, sans-serif';
+    ctx.fillText(w.label, bx, w.y + (above ? -54 : 48));
+    ctx.fillStyle = INK; ctx.font = '600 11px system-ui, sans-serif';
+    ctx.fillText(String(w.pwm), bx, w.y + (above ? -42 : 60));
+  }
+
+  /* 舵角と数値 */
+  ctx.fillStyle = INK2; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('舵角 ' + S.angle[i] + ' (' + steerDeg.toFixed(1) + '°)', cx, cy + 3);
+
+  /* ステアPWM（下部・左右バー） */
+  const sy = VEH.h - 22, half = 70, stv = Math.max(-100, Math.min(100, S.pwmST[i]));
+  ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx - half, sy + 0.5); ctx.lineTo(cx + half, sy + 0.5); ctx.stroke();
+  ctx.strokeStyle = BASE;
+  ctx.beginPath(); ctx.moveTo(cx + 0.5, sy - 6); ctx.lineTo(cx + 0.5, sy + 6); ctx.stroke();
+  ctx.fillStyle = stv >= 0 ? C.drive : C.brake;
+  const sw = stv / 100 * half;
+  if (sw >= 0) roundRect(ctx, cx, sy - 4, Math.max(1, sw), 8, 3); else roundRect(ctx, cx + sw, sy - 4, -sw, 8, 3);
+  ctx.fill();
+  ctx.fillStyle = MUTED; ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('ステアPWM', cx - half, sy - 10);
+  ctx.fillStyle = INK; ctx.textAlign = 'right'; ctx.font = '600 11px system-ui, sans-serif';
+  ctx.fillText(String(S.pwmST[i]), cx + half + 32, sy + 4);
+}
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ================= 再生エンジン ================= */
+let rafId = null, lastTs = null;
+function updatePlayBtn() {
+  document.getElementById('playBtn').textContent = playing ? '⏸ 停止' : '▶ 再生';
+}
+function play() {
+  if (!S || playing) return;
+  if (cur >= N - 1) cur = 0;
+  playing = true; updatePlayBtn(); lastTs = null;
+  rafId = requestAnimationFrame(tick);
+}
+function pause() {
+  playing = false; updatePlayBtn();
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+}
+function tick(ts) {
+  if (!playing) return;
+  if (lastTs !== null) {
+    const mult = parseFloat(document.getElementById('speedSel').value);
+    cur += (ts - lastTs) / 1000 * mult / DT;
+    if (cur >= N - 1) {
+      if (document.getElementById('loopChk').checked) cur = 0;
+      else { cur = N - 1; seekTo(cur, true); pause(); return; }
+    }
+    seekTo(cur, true);
+  }
+  lastTs = ts;
+  rafId = requestAnimationFrame(tick);
+}
+document.getElementById('playBtn').addEventListener('click', () => playing ? pause() : play());
+document.getElementById('stepBackBtn').addEventListener('click', () => { pause(); seekTo(Math.round(cur) - 1); });
+document.getElementById('stepFwdBtn').addEventListener('click', () => { pause(); seekTo(Math.round(cur) + 1); });
+document.getElementById('seekBar').addEventListener('input', e => seekTo(parseInt(e.target.value, 10)));
+document.addEventListener('keydown', e => {
+  if (!S) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); pause(); seekTo(Math.round(cur) - (e.shiftKey ? 10 : 1)); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); pause(); seekTo(Math.round(cur) + (e.shiftKey ? 10 : 1)); }
+});
+
+/* 全ビュー同期更新 */
+let lastTableSync = 0;
+function seekTo(idx, fromEngine) {
+  if (!S) return;
+  cur = Math.max(0, Math.min(N - 1, idx));
+  const i = Math.round(cur);
+  document.getElementById('seekBar').value = i;
+  document.getElementById('roIdx').textContent = i;
+  document.getElementById('roTime').textContent = (i * DT).toFixed(2);
+  document.getElementById('roDist').textContent = S.dist[i].toFixed(2);
+  /* 再生中にカーソルが表示範囲外に出たらビューを送る */
+  if (fromEngine && playing && (cur < view.a || cur > view.b) && view.b - view.a < N - 1) {
+    const span = view.b - view.a;
+    view.a = Math.min(N - 1 - span, cur);
+    view.b = view.a + span;
+    drawChartsStatic();
+  }
+  drawVehicle(i);
+  drawChartOverlay();
+  drawMapOverlay();
+  const now = performance.now();
+  if (!fromEngine || now - lastTableSync > 120) { lastTableSync = now; highlightTableRow(i); }
+}
+function drawOverlays() { drawChartOverlay(); drawMapOverlay(); }
+
+/* ================= テーブル ================= */
+function renderTable() {
+  const table = document.getElementById('logTable');
+  table.textContent = '';
+  trByIdx = new Map(); lastHighlightTr = null;
+  const headerRow = document.createElement('tr');
+  const thNo = document.createElement('th'); thNo.textContent = 'No'; headerRow.appendChild(thNo);
+  for (const name of COLUMN_NAMES) {
+    const th = document.createElement('th'); th.textContent = name; headerRow.appendChild(th);
+  }
+  table.appendChild(headerRow);
+  const frag = document.createDocumentFragment();
+  for (const rowData of filteredRows) {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = rowData.no;
+    const tdNo = document.createElement('td'); tdNo.textContent = rowData.no; tr.appendChild(tdNo);
+    rowData.values.forEach((v, i) => {
+      const td = document.createElement('td');
+      if (i <= 2) td.className = v === '●' ? 'sensor-on' : 'sensor-off';
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    frag.appendChild(tr);
+    trByIdx.set(rowData.no, tr);
+  }
+  table.appendChild(frag);
+}
+document.getElementById('logTable').addEventListener('click', e => {
+  const tr = e.target.closest('tr');
+  if (!tr || tr.dataset.idx === undefined) return;
+  pause();
+  seekTo(parseInt(tr.dataset.idx, 10));
+});
+function highlightTableRow(i) {
+  if (lastHighlightTr) lastHighlightTr.classList.remove('current-row');
+  const tr = trByIdx.get(i);
+  if (!tr) { lastHighlightTr = null; return; }
+  tr.classList.add('current-row');
+  lastHighlightTr = tr;
+  if (document.getElementById('followChk').checked) {
+    const cont = document.getElementById('tableContainer');
+    const top = tr.offsetTop - cont.clientHeight / 2;
+    cont.scrollTop = Math.max(0, top);
+  }
+}
+
+/* 検索（テーブルのみ絞り込み。再生は全行のまま） */
+document.getElementById('searchInput').addEventListener('input', function (e) {
+  const q = e.target.value.toLowerCase();
+  filteredRows = q === '' ? allRows.slice()
+    : allRows.filter(r =>
+        r.no.toString().includes(q) ||
+        r.values.some(v => v.toString().toLowerCase().includes(q)) ||
+        r.rawLine.toLowerCase().includes(q));
+  renderTable();
+  highlightTableRow(Math.round(cur));
+});
+
+/* ジャンプ */
+document.getElementById('jumpBtn').addEventListener('click', function () {
+  const lineNo = parseInt(document.getElementById('jumpInput').value, 10);
+  if (isNaN(lineNo)) return;
+  const tr = trByIdx.get(lineNo);
+  if (tr) {
+    tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    tr.classList.add('highlight');
+    setTimeout(() => tr.classList.remove('highlight'), 2000);
+  }
+});
+
+/* CSV出力 */
+document.getElementById('exportBtn').addEventListener('click', function () {
+  const csvContent = [
+    ['No', ...COLUMN_NAMES].join(','),
+    ...filteredRows.map(row => [row.no, ...row.values].join(','))
+  ].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'mcr_log_export.csv';
+  link.click();
+});
+</script>
+</body>
+</html>

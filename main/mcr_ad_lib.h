@@ -35,6 +35,7 @@ class mcr_ad {
     void start( void );
     int16_t getData( uint8_t ch );
     int16_t getDataDual( uint8_t ch );
+    void scanDual( const uint8_t *ch, int16_t *ret, uint8_t num );
 };
 
 #endif // MCR_AD_LIB_H

@@ -1,9 +1,9 @@
 /**********************************************************************/
 /**
- * @file	ra4m1_advance_okako.ino
+ * @file	personal_setting.h
  *
- * @brief	2024 RA4M1ベースプログラム.
- *0
+ * @brief	ピン割当・PWM周期・車体固有定数 (2024 RA4M1ベース).
+ *
  * @author	月虹.
  *
  * Language	Arduino
@@ -37,9 +37,6 @@
 #include "lcd_lib.h"        // LCD用ライブラリ
 #include "switch_lib.h"     // スイッチ用ライブラリ
 #include "i2c_eeprom_lib.h" // I2C用ライブラリ
-// #include "18curves_array.h"
-// #include "curves_array.h"
-#include "iE_value.h"
 
 /**********************************************************************/
 /*
@@ -179,45 +176,16 @@
  */
 #define RUN_SWITCH 34
 
-/*
- *	デジタルセンサピン定義(不使用)
- */
-// #define SENS_D_LL 45  // CN4  4 P708
-// #define SENS_D_CL 55  // CN4 14 P206
-// #define SENS_D_CC 44  // CN4  3 P214
-// #define SENS_D_CR 56  // CN4 15 P200
-// #define SENS_D_RR 43  // CN4  2 P215
-
-/*
- *	デジタルセンサ値取得マクロ(不使用)
- */
-// #define SENS_LL !(R_PORT7->PIDR_b.PIDR8)
-// #define SENS_CL !(R_PORT2->PIDR_b.PIDR6)
-// #define SENS_C !(R_PORT2->PIDR_b.PIDR14)
-// #define SENS_CR !(R_PORT2->PIDR_b.PIDR0)
-// #define SENS_RR !(R_PORT2->PIDR_b.PIDR15)
-// #define SENS_ALL (SENS_LL << 2 | SENS_C << 1 | SENS_RR)
-// #define GATE SENS_RR
 
 /*
  *	アナログセンサピン定義(@TODO ポートを確認の上設定)
  */
-// #define SENS_A_UR 8  // CN8  2 D61　坂用右
 #define SENS_A_RR 17 // CN8  9 D68　マーカー右
 #define SENS_A_CR 10 // CN8  5 D64　トレース用右
 #define SENS_A_CC 25 // CN8  4 D63　真ん中
 #define SENS_A_CL 24 // CN8  3 D62　トレース用左
 #define SENS_A_LL 16 // CN8  8 D67　マーカー左 23
-// #define SENS_A_UL 23 // CN8  6 D65　坂用左
 #define SENS_A_VR 18 // CN8  7 D66　ポテンショメータ
-// #define SENS_A_RR 16    // CN8  9 D68
-// #define SENS_A_LL 17    // CN8  8 D67
-// #define SENS_A_VR 18    // CN8  7 D66
-// #define SENS_A_SAKA 23  // CN8  6 D65
-// #define SENS_A_0 24     // CN8  5 D64
-// #define SENS_A_1 25     // CN8  4 D63
-// #define SENS_A_2 10     // CN8  3 D62
-// #define SENS_A_3 8      // CN8  2 D61
 
 /*
  *	アナログ値取得マクロ
@@ -226,35 +194,19 @@
  *		R8仕様に合わせる為4bitシフトしているが、
  *		14bitを使う方が細かく動作が指定できるので要調整
  */
-// #define ANA_SENS_UR (ad.getDataDual(SENS_A_UR))
 #define ANA_SENS_RR (ad.getDataDual(SENS_A_RR))
 #define ANA_SENS_CR (ad.getDataDual(SENS_A_CR))
 #define ANA_SENS_CC (ad.getDataDual(SENS_A_CC))
 #define ANA_SENS_CL (ad.getDataDual(SENS_A_CL))
 #define ANA_SENS_LL (ad.getDataDual(SENS_A_LL))
-// #define ANA_SENS_UL (ad.getDataDual(SENS_A_UL))
 
-// #define ANA_SENS_UR (ad.getDataDual(SENS_A_UR) >> 4) // >> 4　↓
-// #define ANA_SENS_RR (ad.getDataDual(SENS_A_RR) >> 4)
-// #define ANA_SENS_CR (ad.getDataDual(SENS_A_CR) >> 4)
-// #define ANA_SENS_CC (ad.getDataDual(SENS_A_CC) >> 4)
-// #define ANA_SENS_LL (ad.getDataDual(SENS_A_CL) >> 4)
-// #define ANA_SENS_CL (ad.getDataDual(SENS_A_LL) >> 4)
-// #define ANA_SENS_UL (ad.getDataDual(SENS_A_UL) >> 4)
 
 #define BAR_ANGLE (1023 - (ad.getDataDual(SENS_A_VR) >> 4))
 
-// #define SLOPE_ANGLE -1
-// #define ANA_SENS_L (ad.getDataDual(SENS_A_LL) >> 4)
-// #define ANA_SENS_R (ad.getDataDual(SENS_A_RR) >> 4)
-// #define SLOPE_ANGLE (ad.getDataDual(SENS_A_SAKA) >> 6)
-// #define BAR_ANGLE (1023 - (ad.getDataDual(SENS_A_VR) >> 4))
 
 /*
  *	ディップSWによるモード
  */
-#define MODE_NORMAL 0
-#define MODE_STOP_MOTOR 1
 
 /*
  *	LED定義
@@ -266,8 +218,6 @@
 #define CPU_LED_2 (R_PORT2->PODR_b.PODR5)    // CPUボード LED2
 #define CPU_LED_3 (R_PORT1->PODR_b.PODR11)   // CPUボード LED3
 
-// #define THRESHOLD_H 1000 // アナログセンサ(0～1023)白判定しきい値  1000
-// #define THRESHOLD_L 800  // アナログセンサ(0～1023)黒判定しきい値  800
 
 #define ON 1
 #define OFF 0 // 走行パラメータ
@@ -281,14 +231,6 @@
 #define sCR 3
 #define sRR 4
 
-#define STREAT_JUDGE_ANGLE 40
-#define CORNER_SPEED 65         // 未使用
-#define CORNER_PWM 100          // コーナー脱出時の最高PWM
-#define CORNER_FREEPWM_ANGLE 70 // コーナー　モータフリー（パーシャル）判定角度
-#define CORNER_FREEPWM_SPEED 1  // コーナー　モータフリースピード
-// #define SLOPE_UP_SPEED 60       // 坂の上り速度 60= 4.0m/s
-// #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
-// #define SLOPE_DOWN_SPEED 60     // 坂の下り速度 60= 4.0m/s
 
 
 
@@ -306,10 +248,30 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 
 #define THR_Sens 400    //白判定しきい値  400
 #define THR_M_Sens 300  //白判定しきい値  300
-#define thrSensBK 100   //黒判定しきい値  200 150 100 使ってない
 
 #define ACCEL_ANGLE 20  //再生走行用直線判断アングル
-#define BRAKE_DISTANCE 800  //再生走行用ブレーキング距離
+
+/*
+ * 再生走行 直線区間の後処理パラメータ（Log_Analysisで使用）
+ */
+#define REP_RAW_MAX 100        // 解析時に一時保持する区間の最大数
+#define REP_MERGE_GAP_CM 10    // この間隔[cm]以下で分断された直線は結合する
+#define REP_MIN_LENGTH_CM 55   // これ未満[cm]の直線は加速区間にしない
+
+/*
+ * サーボゲイン動的補正（坂などでのセンサ-路面距離変化の補正）
+ *   0: 補正なし
+ *   1: 補正をP・D項に一括適用（推奨・一本化）
+ *   2: 旧実装（センサ値±15% ＋ センサ値×係数 ＋ 舵角<20時ゲイン×係数 の三重がけ）
+ * 基準値はスタート待ち(pattern2, 約100ms)中のセンサ合計の平均で初期化する。
+ * 注意: 旧実装は基準値が初期化されないバグで実質不発（常時0.85倍減衰のみ）だった。
+ *       モード0/1では0.85倍減衰が無くなるため実効ゲインが約18%上がる。
+ *       初回テストはトレースkpを1段下げから始めること。
+ */
+#define SERVO_GAIN_CORR_MODE 1
+#define SERVO_GAIN_CORR_COEF 0.002f // 補正感度（旧実装は0.01）
+#define SERVO_GAIN_CORR_MIN 0.7f    // 補正下限（旧実装は0.2）
+#define SERVO_GAIN_CORR_MAX 1.4f    // 補正上限（旧実装は2.0）
 
 #define STOP 0    //PWM＝0
 #define TRACE 1   //ライン追従
@@ -329,7 +291,6 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 #define M_PER_PULSE     0.000691f
 #define CM_PER_PULSE    0.0691f
 #define PULSE_TO_MS     0.0691f
-#define MS_TO_PULSE_PER_10MS  14.468f
 
 // ========== 変換マクロ ==========
 #define DATA_TO_MS(x)   ((float)(x) / 10.0f)
@@ -349,7 +310,7 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 #define CRANK_MIN_SPEED   1.8// 2.0m/s
 
 
-#define PWM_MAX 80  //足回りモーターのマックスPWM（記憶走行）
+#define PWM_MAX 30  //足回りモーターのマックスPWM（記憶走行）
 
 /*
  *	ステアセンター値
@@ -357,8 +318,11 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
  */
 #define VR_CENTER 524 //497
 
-// 1mの距離
+// 1mの距離（エンコーダパルス数）
 #define METER 1447L
+
+// cm → エンコーダパルス変換（距離のしきい値はcmで書き、この変換を通す）
+#define CM_TO_PULSE(cm) ((long)((cm) * (METER / 100.0f)))
 
 /*
  *	坂関連
@@ -370,7 +334,6 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 /*
  *	内臓フラッシュ関連
  */
-#define FLASH_SIZE 0x2000
 #define FLASH_HEADER 0xA5
 typedef enum
 {
@@ -385,6 +348,8 @@ typedef enum
   LANE_SPEED_ADDR = 0x08,   // レーン進入速度
   SLOPE_SPEED_ADDR = 0x09,     // 坂感知閾値
   ACCEL_SPEED_ADDR = 0x0A,     // 直線加速速度
+  VR_CENTER_H_ADDR = 0x0B,     // ステアセンター 上位バイト(0..1023を2バイトで保存)
+  VR_CENTER_L_ADDR = 0x0C,     // ステアセンター 下位バイト
   // LANE_ANGLE_L_ADDR	=		0x09,	// 左レーンアングル
   // LANE_ANGLE_R_ADDR	=		0x0A,	// 右レーンアングル
   // SENS_L_THOLD1_ADDR	=		0x0B,	// アナログセンサ左閾値(上位)
@@ -398,9 +363,5 @@ typedef enum
   MAX_NUM_ADDR
 } FLASH_ADDR;
 
-// #define MTPWM_START 70 //%
-
-/*autoブレーキ関係*/
-// #define F_Brake 100      //70
-// #define R_Brake 100      //55
-// #define Inside_ofset 65 //%　　85
+// data_buffの2バイト(上位/下位)からステアセンター値(0..1023)を復元
+#define VR_CENTER_GET() (((uint16_t)data_buff[VR_CENTER_H_ADDR] << 8) | (uint16_t)data_buff[VR_CENTER_L_ADDR])

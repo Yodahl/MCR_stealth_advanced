@@ -272,9 +272,44 @@ int16_t mcr_ad::getDataDual( uint8_t ch ) {
   return ret;
 }
 
+//**********************************************************************
+// A/D変換　複数チャンネル一括取得（2回スキャンし2回目の値を採用）
+// getDataDualをチャンネル毎に呼ぶより、ソフトの起動・待機オーバーヘッドが
+// 1/チャンネル数になる。変換順序はハードウェアがチャンネル番号昇順で実行。
+//**********************************************************************
+void mcr_ad::scanDual( const uint8_t *ch, int16_t *ret, uint8_t num ) {
+  uint16_t a0 = 0, a1 = 0;
+
+  /* AD変換するチャンネルをまとめて指定 */
+  for( uint8_t i = 0; i < num; i++ ) {
+    if( ch[i] >= 16 ) {
+      a1 |= AD_PORT_ChA1[ch[i]-16];
+    } else {
+      a0 |= AD_PORT_ChA0[ch[i]];
+    }
+  }
+  R_ADC0->ADANSA[0] = a0;
+  R_ADC0->ADANSA[1] = a1;
+
+  R_ADC0->ADCSR_b.ADST = 1;     // スタート
+  while(R_ADC0->ADCSR_b.ADST == 1); //AD変換待機
+
+  R_ADC0->ADCSR_b.ADST = 1;     // 二回目スタート
+  while(R_ADC0->ADCSR_b.ADST == 1); //AD変換待機
+
+  for( uint8_t i = 0; i < num; i++ ) {
+    ret[i] = R_ADC0->ADDR_b[ch[i]].ADDR; //AD値取得
+  }
+
+  /* チャンネル指定のリセット */
+  R_ADC0->ADANSA[0] = 0;
+  R_ADC0->ADANSA[1] = 0;
+}
+
 /*
 Ver.1.00 2023.09.04 作成
 Ver.1.01 2024.02.17 AN023,AN024,AN025のAD変換が正しく動作しないバグを修正
 Ver.1.02 2024.08.22 ADシングルモードへ 想毬ちゃん
+Ver.1.03 2026.07.02 複数チャンネル一括スキャン(scanDual)追加
 */
 
