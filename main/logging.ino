@@ -71,9 +71,9 @@ void LOG_rec(void)
     saveDataA[3][logCt] = lEncoderTotal - lEncoderBuff;
     saveDataA[4][logCt] = getServoAngle();
     saveDataA[5][logCt] = iSetAngle;        // iSetAngle
-    saveDataA[6][logCt] = anaSensCL_diff;   // sensNormalized[sLL]
+    saveDataA[6][logCt] = anaSensLL_diff;   // sensNormalized[sLL]
     saveDataA[7][logCt] = anaSensCC_diff;   // sensNormalized[sCC]
-    saveDataA[8][logCt] = anaSensCR_diff;   // sensNormalized[sRR]
+    saveDataA[8][logCt] = anaSensRR_diff;   // sensNormalized[sRR]
     saveDataA[9][logCt] = motor_buff_stare; //: PWMステアリング;motor_buff_stare
     saveDataA[10][logCt] = motor_buff_Rl;   //: PWM後左;
     saveDataA[11][logCt] = motor_buff_Fl;   //: PWM前左;

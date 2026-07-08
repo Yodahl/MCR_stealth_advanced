@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - ボード: RMC-RA4M1（Renesas RA4M1, Arduino環境）
 - スケッチ: `main/` フォルダ
-- PC側ツール: `MCRLoger*.HTML`（走行ログCSVをブラウザで可視化。**ver4が最新**＝再生機能付き: 車両パネル・時系列グラフ・推定軌跡マップ。完全自己完結でオフライン動作。ヘッドレスChrome＋fetchフックで自動検証可能）
+- PC側ツール: `MCRLoger*.HTML`（走行ログCSVをブラウザで可視化。**ver4が最新**＝再生機能付き: 車両パネル・時系列グラフ（系列表示トグル付き）・推定軌跡マップ（速度ヒートマップ、舵角換算/センター補正/ホイールベース調整付き）。完全自己完結でオフライン動作。ヘッドレスChrome＋fetchフックで自動検証可能）
+- 実車のSDカードは `/Volumes/NO NAME/LOG/LOGnnnnn.CSV` にマウントされる
 - `LOG_REP.CSV` / `sample.csv`: 再生走行データとロガー用のサンプル
 
 ## ビルド
@@ -41,7 +42,7 @@ CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/
 | `isr.ino` | タイマ割り込み本体 |
 | `sensor.ino` | 正規化(`Diff_Nomal`)・ライン/坂検出・サーボ角取得・距離ゲイン動的補正 |
 | `motor.ino` | 4輪+ステアのPWM出力（レジスタ直叩き）、DIPSW/プッシュSW |
-| `servo.ino` | トレース用サーボPD制御、速度PD制御(`PDtrace_Control`) |
+| `servo.ino` | トレース用サーボPD制御、速度PD制御(`PDtrace_Control`)、目標速度ヘルパー（`cornerTargetSpeed`=舵角減速テーブル・case11/52共用、`crankEntryTarget`=クランク進入のCRANK_TOP_SPEED上限） |
 | `params_lcd.ino` | LCDメニューによる走行パラメータ調整と内蔵Flash(EEPROM)保存 |
 | `logging.ino` | 10ms毎ログ→RAMリングバッファ→microSD (`LOG/logNNNNN.csv`) |
 | `replay.ino` | 再生走行: ログ解析→`REP/Log_Rep.csv`→直線区間で加減速判定 |
@@ -56,6 +57,19 @@ CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/
 ### ステアセンター（VR_CENTER）
 
 ステア中立位置のポテンショ値。以前はコンパイル時 `#define VR_CENTER`（524）固定だったが、EEPROMパラメータ化した。0〜1023の値を `VR_CENTER_H_ADDR`(0x0B)/`VR_CENTER_L_ADDR`(0x0C) の2バイトに分割保存し、`VR_CENTER_GET()`（personal_setting.h）で復元。run-start（main.ino case1）で `iAngle0 = VR_CENTER_GET()` として使い、LCDメニュー**12番「Center」**で設定する（ハンドルを直進で保持→`SET`スイッチで現在の `g_current_raw_adc` を取り込み、`DATA_UP/DOWN`で±1微調整。保存は他パラメータ同様に走行開始時か「10 Parameter Set」で永続化）。`#define VR_CENTER` はEEPROM未初期化時のデフォルト値としてのみ残存。自動取得方式は「センターでない値を掴む」ため採用しない方針（固定値＋現場でLCD再測定が結論）。
+
+### ライン検出（クロス/ハーフ）の要点 — 変更時は必読
+
+- 検出条件は**部分集合の関係**にある: クロスライン(LL+CC+RR) ⊃ 左ハーフ(LL+CC) / 右ハーフ(CC+RR)。ISR側（isr.ino case4）は必ず**クロス→左→右の優先順位で排他（else if）**にすること。独立ifに戻すと、クロスライン上で3条件すべて成立し最後の判定が勝つ。
+- `check_crossline()`（sensor.ino）は**斜め跨ぎのタイミングスキュー対応版**: 片側マーカーはデバウンス済み(sensXXon)を要求しつつ、反対側は瞬時値(digiSensXX)でも認める。斜めに跨ぐと左右のデバウンス済みON期間(4ms)が時間的に重ならず、旧実装（両側デバウンス必須）ではクロスラインをハーフラインと誤読してコースアウトした実績がある（LOG00309）。
+- **case 151 のクロスライン再チェック窓（5cm）を広げてはいけない**。本物のレーンチェンジでも検出10cm以降にLL/CC/RR全点灯の帯が出る（LOG00308/309実測）ため、窓を広げるとレーンをクランクに誤再分類する。コード内コメントにも記載あり。
+- case 151/152 には誤読み時の脱出ガード（`abs(舵角)>25`→pattern 11復帰）がある。本物のレーン中の舵角は±5程度なので誤爆しない。
+
+### 走行ログの解析
+
+ログは10ms/行、`d_0=… d_15=… fin` 形式。チャンネル対応（`logging.ino` の `LOG_rec`/`writeLog` が根拠）:
+d_0=ラインセンサbit(LL<<2|CC<<1|RR ※LL/RRはマーカーセンサ、アナログ値はログに無い) / d_1=10ms毎エンコーダパルス(×0.0691=m/s) / d_2=pattern / d_3=減算距離 / d_4=サーボ実舵角 / d_5=指定角 / d_6-8=**トレース用**アナログCL/CC/CR / d_9=ステアPWM / d_10-13=モータPWM RL/FL/FR/RR / d_14=累積パルス / d_15=slopeCheck。
+解析の定石: pattern遷移タイムライン→停止原因（220=距離/231=脱輪・滞留）→直線区間の舵角平均（センターずれ）→イベント進入速度→フルブレーキ発生箇所→d_15誤判定区間。**d_6のanaLはCLでありLLマーカーではない**（過去に混同で誤った結論を出しかけた）。
 
 ### 単位系の注意
 
@@ -74,5 +88,6 @@ CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/
 - 同一パターン滞留の安全停止 `safety_cnt >= 600` は**0.6秒**（1msブロック内。コメントの旧記述「6秒」は誤りだった）。**0.6秒で良いというのがユーザーの判断（2026-07確認済み）なので変更しないこと**。ただし走行ログで pattern>100 の直後に 231 へ飛ぶ誤停止を見つけたら、ここが原因の可能性をユーザーに伝える
 - ログのリングバッファはSD書き込みが遅延すると未書込データを上書きする
 - `lcdProcess` のADC読み（`BAR_ANGLE`等）はISRのADCスキャンと排他されていない（表示のみ実害なし・従来から）
+- ステアセンターが左に3〜4カウントずれている実測データあり（LOG00308/309の直線平均舵角+1.4〜+3.8）。LCDメニュー12での実車校正待ち
 
-過去に修正済み: 坂検知 `Slope_thr[5]` の配列外書き込み（メモリ破壊）、LCDメニュー case11 のスイッチ判定、再生走行距離のuint16切り詰め（45m超で破綻）。
+過去に修正済み: 坂検知 `Slope_thr[5]` の配列外書き込み（メモリ破壊）、LCDメニュー case11 のスイッチ判定、再生走行距離のuint16切り詰め（45m超で破綻）、クロスライン斜め跨ぎのハーフライン誤読（LOG00309コースアウトの原因）、坂下り後(case52)のコーナーを直線速度で走る問題、クランク進入減速がCRANK_SPEED設定値頼みで実質効いていなかった問題、slopeCheckのスタート直後誤判定（バッファ未充填）とレーン中の誤判定（舵角ガード）。

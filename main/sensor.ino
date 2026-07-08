@@ -89,13 +89,21 @@ int check_crossline(void)
 {
     int ret = 0;
 
-    if (sensLLon == ON && digiSensCC == ON && sensRRon == ON && abs(getServoAngle()) < 15 && abs(Angle_D) < 5)
+    /* クロスラインを斜めに跨ぐと左右マーカーの到達に数msの差が出て、
+       デバウンス済みON期間(sensXXon)同士が時間的に重ならないことがある。
+       LOG00309: 舵角-8で跨ぎ左マーカーだけ確定→ハーフライン誤検出→
+       レーン動作でクランクに直進しコースアウト。
+       片側はデバウンス済みを要求しつつ、反対側は瞬時値(digiSens)でも
+       認めることでスキューを吸収する。ノイズ耐性は「最低片側は4ms確定済み
+       ＋CC点灯＋舵角ガード」で担保 */
+    char leftSeen  = (sensLLon == ON) || (digiSensLL == ON);
+    char rightSeen = (sensRRon == ON) || (digiSensRR == ON);
+    char oneConfirmed = (sensLLon == ON) || (sensRRon == ON);
+
+    if (leftSeen && rightSeen && oneConfirmed &&
+        digiSensCC == ON && abs(getServoAngle()) < 15 && abs(Angle_D) < 5)
     {
         ret = 1;
-    }
-    else
-    {
-        ret = 0;
     }
 
     return ret;
@@ -147,6 +155,11 @@ int slopeCheck() // 坂検知
 {
     int total_slope = 0;
 
+    // 基準バッファ未充填（スタート直後）は判定しない
+    // （LOG00308: 発進直後0.35秒間、上り誤判定が出ていた）
+    if (slope_start_cnt < 10)
+        return 0;
+
     if (which_slope)
     {
         for (int i = 0; i < 5; i++)
@@ -166,11 +179,14 @@ int slopeCheck() // 坂検知
 
     int diff = anaSensCC_diff - average; // ← 現在値と平均の差
 
+    // 舵角が大きいときはセンサが浮く/ラインから外れるため判定しない
+    // （LOG00308: レーンチェンジのカウンタ操舵中に下り誤判定が出ていた。
+    //   旧コードは上りのみ getServoAngle()<=10 で、右切り(負)を素通ししていた）
     // 上り坂: 現在値が平均より大きい
-    if (diff > SLOPE_UP_START && getServoAngle() <= 10)
+    if (diff > SLOPE_UP_START && abs(getServoAngle()) <= 10)
         return 1;
     // 下り坂: 現在値が平均より小さい
-    else if (diff < -SLOPE_DOWN_START)
+    else if (diff < -SLOPE_DOWN_START && abs(getServoAngle()) <= 15)
         return -1;
     // 平坦: 変化が小さい
     else

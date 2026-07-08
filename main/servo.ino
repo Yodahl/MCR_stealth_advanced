@@ -2,6 +2,49 @@
 /* サーボ制御(PD) と 速度制御(PDtrace)
 /**********************************************************************/
 
+/************************************************************************/
+/* 舵角に応じたコーナー目標速度（case 11の減速テーブル）                */
+/* 引数   angle_i: サーボ角（|angle_i| > 10 のとき呼ぶこと）            */
+/* 戻り値 PDtrace_Controlへ渡す目標値                                   */
+/* @note  case 11 と case 52（坂下り後）で共用。                        */
+/*        Angle_D_GF（切り込み中の減速補正）もここで更新する。          */
+/************************************************************************/
+float cornerTargetSpeed(int angle_i)
+{
+    // 舵角が戻り方向なら補正なし、切り込み中は負の補正（減速方向）
+    if (Angle_D > 0)
+        Angle_D_GF = 0;
+    else
+        Angle_D_GF = Angle_D;
+
+    if (abs(angle_i) > 110)
+        return (data_buff[CORNER_SPEED_ADDR] * 80.0f / 100.0f) + Angle_D_GF; // 50
+    if (abs(angle_i) > 80)
+        return (data_buff[CORNER_SPEED_ADDR] * 86.0f / 100.0f) + Angle_D_GF; // 65
+    if (abs(angle_i) > 68)
+        return (data_buff[CORNER_SPEED_ADDR] * 94.0f / 100.0f) + Angle_D_GF; // 80
+    if (abs(angle_i) > 47)
+        return (data_buff[CORNER_SPEED_ADDR] * 96.0f / 100.0f) + Angle_D_GF; // 88
+    if (abs(angle_i) > 20)
+        return (data_buff[CORNER_SPEED_ADDR] * 98.0f / 100.0f) + Angle_D_GF;
+    return (data_buff[CORNER_SPEED_ADDR]) + Angle_D_GF;
+}
+
+/************************************************************************/
+/* クランク進入（case 101/106）の目標速度                               */
+/* 戻り値 CRANK_SPEED設定値とCRANK_TOP_SPEED(m/s×10)の低い方           */
+/* @note  設定値がCRANK_TOP_SPEEDより高いと、108のバンバン制御に        */
+/*        任せるまで減速が始まらず高速進入する（LOG00308で2.63m/s進入・ */
+/*        フルブレーキを確認）。クロスライン通過直後から2.2m/sへ        */
+/*        落とし始めるよう上限を掛ける。                                */
+/************************************************************************/
+short crankEntryTarget(void)
+{
+    short t = data_buff[CRANK_SPEED_ADDR];
+    short cap = (short)(CRANK_TOP_SPEED * 10.0f);
+    return (t > cap) ? cap : t;
+}
+
 
 /************************************************************************/
 /* サーボモータ制御  トレース用                                            */
@@ -72,8 +115,8 @@ void servoControl2(void)
     j = getServoAngle();
 
     /* サーボモータ用PWM値計算 */
-    iP = 5 * (j - i);              // 比例 10
-    iD = 20 * (iAngleBefore2 - j); // 微分(目安はPの5～10倍) 60
+    iP = 8 * (j - i);              // 比例 8
+    iD = 60 * (iAngleBefore2 - j); // 微分(目安はPの5～10倍) 60
     iRet = iP - iD;
     iRet /= 4;
 

@@ -84,6 +84,8 @@ short Dig_M(short angle);
 short Ang(void);
 void PDtrace_Control(short Dig, short target_speed_ms, char boost_trig = false);
 void PDtrace_Control_S(short Dig, float target_speed_ms);
+float cornerTargetSpeed(int angle_i); // 舵角に応じたコーナー目標速度
+short crankEntryTarget(void);         // クランク進入目標速度(CRANK_TOP_SPEED上限付き)
 
 
 // ログ関係
@@ -549,43 +551,13 @@ void loop()
             i = getServoAngle(); // -120 ~ 120 の範囲
             iSetAngle = 0;
 
-            // --- Angle_D_GFの計算（角度による速度補正値） ---
-            if (Angle_D > 0)
-            {
-                Angle_D_GF = 0;
-            }
-            else
-            {
-                Angle_D_GF = Angle_D; // 負の値（減速方向）
-            }
-
             // --- 目標速度の決定 ---
             float target_value; // PDtrace_Controlに渡す制御値
 
-            // ========== 舵角による速度調整 ==========
-            if (abs(i) > 110)
+            // ========== 舵角による速度調整（減速テーブルはcornerTargetSpeed） ==========
+            if (abs(i) > 10)
             {
-                target_value = (data_buff[CORNER_SPEED_ADDR] * 80.0f / 100.0f) + Angle_D_GF; // 50
-            }
-            else if (abs(i) > 80)
-            {
-                target_value = (data_buff[CORNER_SPEED_ADDR] * 86.0f / 100.0f) + Angle_D_GF; // 65
-            }
-            else if (abs(i) > 68)
-            {
-                target_value = (data_buff[CORNER_SPEED_ADDR] * 94.0f / 100.0f) + Angle_D_GF; // 80
-            }
-            else if (abs(i) > 47)
-            {
-                target_value = (data_buff[CORNER_SPEED_ADDR] * 96.0f / 100.0f) + Angle_D_GF; // 88
-            }
-            else if (abs(i) > 20)
-            {
-                target_value = (data_buff[CORNER_SPEED_ADDR] * 98.0f / 100.0f) + Angle_D_GF;
-            }
-            else if (abs(i) > 10)
-            {
-                target_value = (data_buff[CORNER_SPEED_ADDR]) + Angle_D_GF;
+                target_value = cornerTargetSpeed(i);
             }
             // ========== 直線区間（舵角小さい） ==========
             else
@@ -618,7 +590,9 @@ void loop()
             PDtrace_Control(i, target_value, 0);
 
             // --- SLOPE_flag管理 ---
-            if (Get_Distance_cm() > 30 && !SLOPE_flag && slopeTotalCount != 0)
+            // 坂通過後の再検知解禁は100cm（LOG00308で坂出口後30〜70cm区間に
+            // slopeCheckの誤判定が残っており、旧30cmでは再突入の余地があった）
+            if (Get_Distance_cm() > 60 && !SLOPE_flag && slopeTotalCount != 0)
             {
                 SLOPE_flag = true;
             }
@@ -679,7 +653,13 @@ void loop()
             Trace_position = CENTER;
             i = getServoAngle();
             iSetAngle = 0;
-            PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
+            // 復帰条件が揃うまで最大2m以上この状態が続き、その間にコーナーへ
+            // 入ることがある（LOG00308: 舵角+25のコーナーを直線速度指令で通過）。
+            // case 11と同じ舵角減速テーブルを適用する。
+            if (abs(i) > 10)
+                PDtrace_Control(i, cornerTargetSpeed(i));
+            else
+                PDtrace_Control(i, data_buff[TRG_SPEED_ADDR]);
             if (slopeCheck() == 1 && Get_Distance_cm() > 200)
             {
                 pattern = 11;
@@ -704,8 +684,8 @@ void loop()
 
             R_LED = ON;
             L_LED = ON;
-            PDtrace_Control(i, data_buff[CRANK_SPEED_ADDR]);
-            if(abs(i) > 25){
+            PDtrace_Control(i, crankEntryTarget());
+            if(abs(i) > 25 || sensCCon == OFF){ // 舵角が大きいか、センターセンサが外れたらクランクと判断{
                 pattern = 11; // クランク誤読み防止
                 lEncoderBuff = lEncoderTotal;
                 break;
@@ -724,7 +704,7 @@ void loop()
         case 106: // クランク処理 (2段目の減速処理)　ハーフライン検出
             i = getServoAngle();
             iServo_flag = TRACE;
-            PDtrace_Control(i, data_buff[CRANK_SPEED_ADDR]);
+            PDtrace_Control(i, crankEntryTarget());
             if (sensLLon == ON) // クランク方向　左
             {
                 crankDirection = 'L'; // クランク方向記憶変数＝左クランク
@@ -909,10 +889,11 @@ void loop()
         case 120:
             /* 少し時間が経つまで待つ */
             i = getServoAngle(); // ステアリング角度取得
+            iSetAngle = 0;
             iServo_flag = TRACE;
             motor_r(100, 100);
             motor_f(100, 100);
-            if (abs(i) < 15 && Get_Distance_cm() >= 20)
+            if (abs(i) < 15 || Get_Distance_cm() >= 30)
             {
                 cnt1 = 0;
                 pattern = 11;
@@ -943,7 +924,10 @@ void loop()
             { // 左右に振られる対処
                 iServo_flag = STOP;
                 if (check_crossline())
-                { /* クロスラインチェック         */
+                { /* クロスラインチェック
+                     【注意】この窓を広げてはいけない。本物のレーンでも検出10cm
+                     以降にL/C/R全点灯の帯が出る(LOG00308/309実測)ため、
+                     広げるとレーンをクランクに誤再分類する */
                     cnt1 = 0;
                     lEncoderBuff = lEncoderTotal;
                     pattern = 101;
@@ -957,7 +941,6 @@ void loop()
                     Trace_position = RIGHT;
                 else if (laneDirection == 'R') // レーン方向　右
                     Trace_position = LEFT;
-                ;
             }
 
             PDtrace_Control(i, data_buff[LANE_SPEED_ADDR]);
@@ -973,6 +956,18 @@ void loop()
         case 152:                // クロスライン後の処理(白線トレース時)
             i = getServoAngle(); // ステアリング角度取得
             iServo_flag = TRACE;
+
+            /* 誤読み防止(151と同様の脱出ガード)
+               本物のレーンでは152中の舵角は±5程度(LOG00309実測)。
+               クランク誤分類のまま直進すると舵角が発散する(同ログで
+               -26→-43→-78→コースアウト)ため、通常トレースへ復帰させる */
+            if (abs(i) > 25)
+            {
+                pattern = 11;
+                lEncoderBuff = lEncoderTotal;
+                break;
+            }
+
             if (laneDirection == 'L')
             { // レーン方向　左
                 Trace_position = RIGHT;
@@ -1156,6 +1151,7 @@ void loop()
         case 170:
             /* 少し時間が経つまで待つ */
             i = getServoAngle(); // ステアリング角度取得
+            iSetAngle = 0;
             iServo_flag = TRACE;
             if (Get_Distance_cm() >= 10)
             {

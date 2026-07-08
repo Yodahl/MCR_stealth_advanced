@@ -310,7 +310,7 @@ StraightSection straight_sections[MAX_STRAIGHT_SECTIONS];
 #define CRANK_MIN_SPEED   1.8// 2.0m/s
 
 
-#define PWM_MAX 30  //足回りモーターのマックスPWM（記憶走行）
+#define PWM_MAX 40  //足回りモーターのマックスPWM（記憶走行）
 
 /*
  *	ステアセンター値

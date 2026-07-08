@@ -213,15 +213,18 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
             }
 
             // クロスラインチェック
-            if (check_crossline() && SLOPE_flag) //&& crankClearTime == 0 && laneClearTime == 0
+            // 【重要】クロスライン上では check_leftline/check_rightline も
+            // 同時に真になる（条件が部分集合）。旧コードは3つの独立ifで
+            // 最後のrightlineが勝ち、両マーカー同時検出時に必ず151へ
+            // 誤遷移していた。優先順位 クロス > 左ハーフ > 右ハーフ で排他化。
+            if (check_crossline() && SLOPE_flag)
             {
                 cnt1 = 0;
                 pattern = 101;
                 lEncoderBuff = lEncoderTotal;
             }
-
             // 左ハーフラインチェック
-            if (check_leftline() && SLOPE_flag) //&& crankClearTime == 0 && laneClearTime == 0
+            else if (check_leftline() && SLOPE_flag)
             {
                 cnt1 = 0;
                 pattern = 151;
@@ -230,7 +233,7 @@ void timerCallback(timer_callback_args_t __attribute((unused)) * p_args)
                 lEncoderBuff = lEncoderTotal;
             }
             // 右ハーフラインチェック
-            if (check_rightline() && SLOPE_flag) //&& crankClearTime == 0 && laneClearTime == 0
+            else if (check_rightline() && SLOPE_flag)
             {
                 cnt1 = 0;
                 pattern = 151;
